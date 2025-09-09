@@ -1,0 +1,17 @@
+# Python Virtual Environment
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# PyInstaller output folders
+build/
+dist/
+*.spec
+
+# SECRET KEYS - NEVER PUSH TO GITHUB!
+*.key
+
+# IDE / Editor specific
+.vscode/

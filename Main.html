@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certi-Veritas - Smart Certificate Recognition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; /* A very light, clean blue-gray */
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .main-gradient-bg {
+            background: linear-gradient(135deg, #06b6d4, #0891b2, #0e7490);
+        }
+        .main-gradient-text {
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .drag-area-active {
+            border-color: #06b6d4;
+            color: #06b6d4;
+        }
+        .sidebar-link {
+            transition: all 0.2s ease-in-out;
+        }
+        .sidebar-link.active, .sidebar-link:hover {
+            background-color: #0e7490;
+            color: white;
+            transform: translateX(10px);
+        }
+        .chart-container {
+            position: relative; 
+            height: 300px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <!-- App Container -->
+    <div id="app" class="min-h-screen flex flex-col md:flex-row">
+
+        <!-- ======================================================= -->
+        <!-- Admin Dashboard View (Initially hidden on mobile)      -->
+        <!-- ======================================================= -->
+        <div id="dashboard-view" class="hidden md:flex flex-col w-full md:w-64 main-gradient-bg text-white flex-shrink-0">
+            <div class="p-6 text-center border-b border-cyan-600">
+                <h1 class="text-2xl font-bold tracking-wider">Certi-Veritas</h1>
+                <span class="text-sm text-cyan-200">Admin Panel</span>
+            </div>
+            <nav class="flex-grow p-4 space-y-2">
+                <a href="#overview" class="sidebar-link active flex items-center p-3 rounded-lg" data-target="overview">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    Overview
+                </a>
+                <a href="#bulk-upload" class="sidebar-link flex items-center p-3 rounded-lg" data-target="bulk-upload">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    Bulk Upload
+                </a>
+                <a href="#alerts" class="sidebar-link flex items-center p-3 rounded-lg" data-target="alerts">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                    Alerts
+                </a>
+                <a href="#blacklist" class="sidebar-link flex items-center p-3 rounded-lg" data-target="blacklist">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                    Blacklist
+                </a>
+            </nav>
+            <div class="p-4 mt-auto">
+                <button id="switchToUserViewBtn" class="w-full bg-cyan-100 text-cyan-800 font-semibold p-3 rounded-lg hover:bg-white transition">
+                    Switch to User View
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-grow">
+            <!-- Main Content Area -->
+            <main id="main-content" class="w-full flex-grow p-4 sm:p-6 md:p-8">
+
+                <!-- ======================================================= -->
+                <!-- User Upload View                                        -->
+                <!-- ======================================================= -->
+                <div id="user-view">
+                    <header class="flex justify-between items-center mb-10">
+                        <h1 class="text-3xl font-bold main-gradient-text">Certi-Veritas</h1>
+                        <button id="switchToAdminViewBtn" class="hidden md:block bg-slate-200 text-slate-700 font-semibold px-4 py-2 rounded-lg hover:bg-slate-300 transition">
+                            Admin Login
+                        </button>
+                    </header>
+
+                    <div class="max-w-2xl mx-auto text-center">
+                        <h2 class="text-4xl md:text-5xl font-extrabold text-slate-900 mb-4">Verify Academic Credentials Instantly.</h2>
+                        <p class="text-lg text-slate-600 mb-10">Upload a certificate or enter details manually to check authenticity against a secure, verified database.</p>
+                    </div>
+
+                    <div class="max-w-xl mx-auto p-8 glass-card rounded-2xl shadow-xl">
+                        <div id="drag-drop-area" class="border-2 border-dashed border-slate-300 rounded-lg p-10 text-center cursor-pointer transition">
+                            <svg class="w-16 h-16 mx-auto text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                            <p class="mt-4 text-slate-600 font-semibold">Drag & drop your file here</p>
+                            <p class="text-sm text-slate-500">or</p>
+                            <label for="file-upload" class="mt-2 inline-block bg-cyan-500 text-white font-semibold px-5 py-2 rounded-lg cursor-pointer hover:bg-cyan-600 transition">
+                                Browse File
+                            </label>
+                            <input id="file-upload" type="file" class="hidden">
+                            <p id="file-name" class="mt-3 text-sm text-slate-700 font-medium"></p>
+                        </div>
+
+                        <div class="my-6 flex items-center text-center">
+                            <div class="flex-grow border-t border-slate-300"></div>
+                            <span class="flex-shrink mx-4 text-slate-500 font-medium">Or enter manually</span>
+                            <div class="flex-grow border-t border-slate-300"></div>
+                        </div>
+
+                        <form id="manual-form" class="space-y-4">
+                            <div>
+                                <label for="name" class="block text-sm font-medium text-slate-700">Full Name</label>
+                                <input type="text" id="name" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500">
+                            </div>
+                            <div>
+                                <label for="roll-number" class="block text-sm font-medium text-slate-700">Roll Number</label>
+                                <input type="text" id="roll-number" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500">
+                            </div>
+                            <div>
+                                <label for="cert-id" class="block text-sm font-medium text-slate-700">Certificate ID</label>
+                                <input type="text" id="cert-id" class="mt-1 block w-full px-3 py-2 bg-white border border-slate-300 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-cyan-500 focus:border-cyan-500">
+                            </div>
+                            <button id="verify-btn" type="button" class="w-full main-gradient-bg text-white font-bold py-3 px-4 rounded-lg hover:opacity-90 transition shadow-lg">
+                                Verify Certificate
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- ======================================================= -->
+                <!-- Admin Dashboard Content Panels                        -->
+                <!-- ======================================================= -->
+                <div id="admin-content" class="hidden">
+                    
+                    <!-- Overview Panel -->
+                    <div id="overview" class="dashboard-panel">
+                        <h2 class="text-3xl font-bold text-slate-900 mb-6">Overview</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h3 class="text-slate-500 font-medium">Total Verifications</h3>
+                                <p class="text-4xl font-bold text-cyan-600 mt-2">12,834</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h3 class="text-slate-500 font-medium">Suspected Forgeries</h3>
+                                <p class="text-4xl font-bold text-red-500 mt-2">412</p>
+                            </div>
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h3 class="text-slate-500 font-medium">Forgery Rate</h3>
+                                <p class="text-4xl font-bold text-amber-500 mt-2">3.2%</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h3 class="font-semibold text-lg mb-4">Verification Trends (Last 6 Months)</h3>
+                                <div class="chart-container">
+                                    <canvas id="verificationChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-xl shadow-md">
+                                <h3 class="font-semibold text-lg mb-4">Verification Status</h3>
+                                <div class="chart-container">
+                                    <canvas id="statusChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Upload Panel -->
+                    <div id="bulk-upload" class="dashboard-panel hidden">
+                         <h2 class="text-3xl font-bold text-slate-900 mb-6">Bulk Upload Records</h2>
+                         <div class="bg-white p-8 rounded-xl shadow-md">
+                             <p class="text-slate-600 mb-6">Upload a CSV file with student records to add them to the verified database. The file should contain the columns: `full_name`, `roll_number`, `certificate_id`, `marks_obtained`, `issue_date`.</p>
+                             <div class="border-2 border-dashed border-slate-300 rounded-lg p-10 text-center cursor-pointer">
+                                <svg class="w-16 h-16 mx-auto text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <p class="mt-4 text-slate-600 font-semibold">Drag & drop your CSV file here</p>
+                                <p class="text-sm text-slate-500">or</p>
+                                <button class="mt-2 bg-cyan-500 text-white font-semibold px-5 py-2 rounded-lg hover:bg-cyan-600 transition">
+                                    Browse CSV
+                                </button>
+                             </div>
+                         </div>
+                    </div>
+
+                    <!-- Alerts Panel -->
+                    <div id="alerts" class="dashboard-panel hidden">
+                        <h2 class="text-3xl font-bold text-slate-900 mb-6">Suspicious Activity Alerts</h2>
+                        <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                            <table class="w-full text-left">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="p-4 font-semibold">Certificate ID</th>
+                                        <th class="p-4 font-semibold">Name</th>
+                                        <th class="p-4 font-semibold">Date</th>
+                                        <th class="p-4 font-semibold">Reason</th>
+                                        <th class="p-4 font-semibold">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200">
+                                    <tr>
+                                        <td class="p-4">THP-881-2023-FAKE</td>
+                                        <td class="p-4">Alex Mercer</td>
+                                        <td class="p-4">2025-09-09</td>
+                                        <td class="p-4">ID not in database</td>
+                                        <td class="p-4"><button class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-200">Blacklist</button></td>
+                                    </tr>
+                                     <tr>
+                                        <td class="p-4">MIT-456-2022-MOD</td>
+                                        <td class="p-4">Jane Doe</td>
+                                        <td class="p-4">2025-09-08</td>
+                                        <td class="p-4">Mismatched Name</td>
+                                        <td class="p-4"><button class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-200">Blacklist</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-4">UCLA-101-2021-INV</td>
+                                        <td class="p-4">John Smith</td>
+                                        <td class="p-4">2025-09-07</td>
+                                        <td class="p-4">Invalid Format</td>
+                                        <td class="p-4"><button class="bg-red-100 text-red-700 px-3 py-1 rounded-full text-sm font-semibold hover:bg-red-200">Blacklist</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Blacklist Panel -->
+                    <div id="blacklist" class="dashboard-panel hidden">
+                        <h2 class="text-3xl font-bold text-slate-900 mb-6">Blacklisted Credentials</h2>
+                         <div class="bg-white rounded-xl shadow-md overflow-hidden">
+                            <table class="w-full text-left">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="p-4 font-semibold">Certificate ID</th>
+                                        <th class="p-4 font-semibold">Name</th>
+                                        <th class="p-4 font-semibold">Date Blacklisted</th>
+                                        <th class="p-4 font-semibold">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-200">
+                                    <tr>
+                                        <td class="p-4">THP-123-2020-OLD</td>
+                                        <td class="p-4">Peter Parker</td>
+                                        <td class="p-4">2025-08-15</td>
+                                        <td class="p-4"><button class="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm font-semibold hover:bg-slate-200">Remove</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="p-4">FAKE-ID-007</td>
+                                        <td class="p-4">James Bond</td>
+                                        <td class="p-4">2025-07-01</td>
+                                        <td class="p-4"><button class="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm font-semibold hover:bg-slate-200">Remove</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+        </div>
+    </div>
+    
+    <!-- ======================================================= -->
+    <!-- Verification Result Modal                               -->
+    <!-- ======================================================= -->
+    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+        <div id="result-card-genuine" class="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-8 transform transition-all hidden">
+            <!-- Genuine Result -->
+            <div class="text-center">
+                <div class="w-20 h-20 mx-auto bg-green-100 rounded-full flex items-center justify-center">
+                    <span class="text-5xl">✅</span>
+                </div>
+                <h2 class="text-3xl font-bold text-green-600 mt-4">Genuine Certificate</h2>
+                <p class="text-slate-600 mt-2">This document has been successfully verified against the official database.</p>
+            </div>
+            <div class="mt-8 space-y-4 bg-slate-50 p-6 rounded-lg">
+                <div class="flex justify-between"><span class="font-medium text-slate-500">Name:</span> <span class="font-semibold">AAGNI KANSAL</span></div>
+                <div class="flex justify-between"><span class="font-medium text-slate-500">Roll Number:</span> <span class="font-semibold">102203XYZ</span></div>
+                <div class="flex justify-between"><span class="font-medium text-slate-500">Marks:</span> <span class="font-semibold">9.8 CGPA</span></div>
+                <div class="flex justify-between"><span class="font-medium text-slate-500">Certificate ID:</span> <span class="font-semibold">THP-ENG-102203XYZ</span></div>
+            </div>
+            <div class="mt-6 text-center">
+                <h3 class="font-semibold text-slate-800 mb-2">Blockchain Hash</h3>
+                <code class="text-xs bg-slate-100 text-slate-700 p-2 rounded break-all">0x4a2e...c8f3</code>
+            </div>
+            <button class="close-modal-btn w-full mt-8 bg-slate-200 text-slate-700 font-bold py-3 rounded-lg hover:bg-slate-300 transition">Close</button>
+        </div>
+
+        <div id="result-card-forgery" class="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-8 transform transition-all hidden">
+            <!-- Forgery Result -->
+            <div class="text-center">
+                <div class="w-20 h-20 mx-auto bg-red-100 rounded-full flex items-center justify-center">
+                    <span class="text-5xl">❌</span>
+                </div>
+                <h2 class="text-3xl font-bold text-red-600 mt-4">Suspected Forgery</h2>
+                <p class="text-slate-600 mt-2">This document could not be verified and is flagged as suspicious.</p>
+            </div>
+            <div class="mt-8 bg-red-50 p-6 rounded-lg border border-red-200">
+                <h3 class="font-bold text-red-800 mb-2">Mismatch Explanation:</h3>
+                <p class="text-red-700">The provided <span class="font-semibold">Certificate ID</span> was not found in the official Thapar Institute of Engineering and Technology database.</p>
+            </div>
+            <button class="close-modal-btn w-full mt-8 bg-slate-200 text-slate-700 font-bold py-3 rounded-lg hover:bg-slate-300 transition">Close</button>
+        </div>
+    </div>
+
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // --- Page/View Switching Logic ---
+        const userView = document.getElementById('user-view');
+        const dashboardView = document.getElementById('dashboard-view');
+        const adminContent = document.getElementById('admin-content');
+        const mainContent = document.getElementById('main-content');
+        
+        const switchToAdminViewBtn = document.getElementById('switchToAdminViewBtn');
+        const switchToUserViewBtn = document.getElementById('switchToUserViewBtn');
+        
+        switchToAdminViewBtn.addEventListener('click', () => {
+            userView.classList.add('hidden');
+            dashboardView.classList.remove('hidden');
+            dashboardView.classList.add('flex');
+            adminContent.classList.remove('hidden');
+        });
+
+        switchToUserViewBtn.addEventListener('click', () => {
+            userView.classList.remove('hidden');
+            dashboardView.classList.add('hidden');
+            dashboardView.classList.remove('flex');
+            adminContent.classList.add('hidden');
+        });
+
+        // --- Admin Dashboard Panel Navigation ---
+        const sidebarLinks = document.querySelectorAll('.sidebar-link');
+        const dashboardPanels = document.querySelectorAll('.dashboard-panel');
+        
+        sidebarLinks.forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const targetId = link.dataset.target;
+
+                sidebarLinks.forEach(l => l.classList.remove('active'));
+                link.classList.add('active');
+                
+                dashboardPanels.forEach(panel => {
+                    panel.classList.toggle('hidden', panel.id !== targetId);
+                });
+            });
+        });
+
+        // --- Drag and Drop File Upload ---
+        const dragArea = document.getElementById('drag-drop-area');
+        const fileInput = document.getElementById('file-upload');
+        const fileNameDisplay = document.getElementById('file-name');
+
+        dragArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dragArea.classList.add('drag-area-active');
+        });
+
+        dragArea.addEventListener('dragleave', () => {
+            dragArea.classList.remove('drag-area-active');
+        });
+
+        dragArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragArea.classList.remove('drag-area-active');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                fileNameDisplay.textContent = `File selected: ${files[0].name}`;
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                fileNameDisplay.textContent = `File selected: ${fileInput.files[0].name}`;
+            }
+        });
+
+        // --- Modal Logic ---
+        const modal = document.getElementById('result-modal');
+        const verifyBtn = document.getElementById('verify-btn');
+        const closeBtns = document.querySelectorAll('.close-modal-btn');
+        const genuineCard = document.getElementById('result-card-genuine');
+        const forgeryCard = document.getElementById('result-card-forgery');
+
+        verifyBtn.addEventListener('click', () => {
+            modal.classList.remove('hidden');
+            // Simulate random result for demo purposes
+            if (Math.random() > 0.4) {
+                genuineCard.classList.remove('hidden');
+                forgeryCard.classList.add('hidden');
+            } else {
+                forgeryCard.classList.remove('hidden');
+                genuineCard.classList.add('hidden');
+            }
+        });
+        
+        closeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                modal.classList.add('hidden');
+            });
+        });
+
+        // --- Chart.js Implementation ---
+        const verificationCtx = document.getElementById('verificationChart')?.getContext('2d');
+        if (verificationCtx) {
+            new Chart(verificationCtx, {
+                type: 'line',
+                data: {
+                    labels: ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
+                    datasets: [{
+                        label: 'Total Verifications',
+                        data: [1800, 2200, 1900, 2500, 2800, 3200],
+                        borderColor: '#06b6d4',
+                        backgroundColor: 'rgba(6, 182, 212, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                    }, {
+                        label: 'Forgeries',
+                        data: [40, 55, 45, 70, 80, 95],
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        const statusCtx = document.getElementById('statusChart')?.getContext('2d');
+        if (statusCtx) {
+            new Chart(statusCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Genuine', 'Forgery', 'Pending'],
+                    datasets: [{
+                        label: 'Verification Status',
+                        data: [12422, 412, 1200],
+                        backgroundColor: [
+                            '#10b981', // Green
+                            '#ef4444', // Red
+                            '#f59e0b'  // Amber
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+    });
+    </script>
+</body>
+</html>

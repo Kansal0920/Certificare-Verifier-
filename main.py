@@ -1,7 +1,3 @@
-# main.py
-# AAGNI-CertiFier Backend (Definitive Intelligence Edition V3 - OpenCV)
-# Final, stable version with OpenCV QR Code Support and Flexible OCR.
-import sys
 import pytesseract
 import cv2
 import numpy as np
@@ -16,9 +12,10 @@ import qrcode
 import base64
 import hashlib
 from datetime import datetime
+import sys
+
 # This block helps PyInstaller find the Tesseract-OCR program
 if hasattr(sys, '_MEIPASS'):
-    # This is the path when the app is a bundled executable
     tesseract_path = os.path.join(sys._MEIPASS, 'Tesseract-OCR', 'tesseract.exe')
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
@@ -32,7 +29,7 @@ ADMIN_EMAIL = "admin@gmail.com"
 ADMIN_PASSWORD = "P@ssword123"
 
 # --- FastAPI Init ---
-app = FastAPI(title="CertiFier API (Intelligence V3 - OpenCV)", version="V-Final-OpenCV")
+app = FastAPI(title="CertiFier API (Production)", version="V-Final-Prod")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -83,6 +80,7 @@ def generate_qr_code_base64(cert_data: dict):
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 # --- API ENDPOINTS ---
+# ... (All other endpoints like /admin/login, /dashboard/live_intelligence, etc., remain the same)
 @app.post("/admin/login")
 async def admin_login(email: str = Form(...), password: str = Form(...)):
     if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
@@ -125,7 +123,6 @@ async def bulk_upload_csv(institution_name: str = Form(...), csv_file: UploadFil
         contents = await csv_file.read(); df = pd.read_csv(StringIO(contents.decode('utf-8'))); count = 0
         for _, row in df.iterrows():
             try:
-                # Handle multiple possible column names for the unique ID
                 unique_id_val = str(row.get('student_id') or row.get('registration_no') or row.get('roll_no'))
                 cert_data = {"registration_no": unique_id_val, "name": row['name'], "course": row['course']}
                 blockchain_hash = generate_blockchain_hash(cert_data)
@@ -170,11 +167,15 @@ async def verify_certificate_live(file: UploadFile = File(...)):
     image_cv = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
     gray_image = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
     
+    # ✅ NEW: Image Preprocessing to improve OCR accuracy
+    # Apply thresholding to get a pure black and white image
+    _, preprocessed_image = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # Detect institution first using a quick OCR pass
-    quick_text = pytesseract.image_to_string(gray_image)
+    # ✅ UPDATED: Use the preprocessed image for OCR
+    quick_text = pytesseract.image_to_string(preprocessed_image)
     cursor.execute("SELECT id, name, logo_path FROM institutions")
     all_institutions = cursor.fetchall()
     detected_institution = None
@@ -191,12 +192,10 @@ async def verify_certificate_live(file: UploadFile = File(...)):
     extracted_id = None
     verification_method = None
     
-    # ✅ FINAL VERSION: Attempt QR Code detection using OpenCV
     try:
         qr_detector = cv2.QRCodeDetector()
         qr_data, _, _ = qr_detector.detectAndDecode(image_cv)
         if qr_data:
-            # Use regex to find any likely ID (e.g., long number/string) in the QR data
             id_match = re.search(r'([A-Za-z0-9]{8,})', qr_data)
             if id_match:
                 extracted_id = id_match.group(1)
@@ -204,7 +203,6 @@ async def verify_certificate_live(file: UploadFile = File(...)):
     except Exception as e:
         print(f"QR decoding failed, falling back to OCR. Error: {e}")
 
-    # STEP 2: If QR fails, use flexible OCR as a fallback
     if not extracted_id:
         verification_method = "OCR"
         id_pattern = r'(Registration No|Student ID|Roll No|Enrollment No)\.?\s*([A-Za-z0-9\-]+)'
@@ -212,7 +210,6 @@ async def verify_certificate_live(file: UploadFile = File(...)):
         if id_match:
             extracted_id = id_match.group(2).strip()
 
-    # If BOTH methods fail to find an ID, exit
     if not extracted_id:
         status = "ID Not Found"
         message = "Could not find a valid ID (Reg No, Student ID, or QR Code) on the certificate."
@@ -221,7 +218,7 @@ async def verify_certificate_live(file: UploadFile = File(...)):
         conn.commit(); conn.close()
         return {"status": "Forgery Alert", "message": message}
 
-    # STEP 3: Check against blacklist
+    # ... (Rest of the verification logic: blacklist, logo check, db check, etc.)
     cursor.execute("SELECT reason FROM blacklist WHERE registration_no = ? AND institution_id = ?", (extracted_id, inst_id))
     if cursor.fetchone():
         status = "Blacklisted"; message = f"This certificate ID ({extracted_id}) is blacklisted."
@@ -230,7 +227,6 @@ async def verify_certificate_live(file: UploadFile = File(...)):
         conn.commit(); conn.close()
         return {"status": "Forgery Alert", "message": message}
 
-    # STEP 4: Perform Structural Analysis (Logo Check)
     try:
         logo_template = cv2.imread(detected_institution["logo_path"], 0)
         orb = cv2.ORB_create(nfeatures=2000)
@@ -239,8 +235,8 @@ async def verify_certificate_live(file: UploadFile = File(...)):
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         matches = sorted(bf.match(des1, des2), key=lambda x: x.distance)
         if len(matches) > 10:
-             good_matches = matches[:10] # Use top 10 matches
-             if good_matches[0].distance > 75: # Check distance of the best match
+             good_matches = matches[:10]
+             if good_matches[0].distance > 75:
                  raise Exception("Poor logo match quality.")
         else:
              raise Exception("Not enough logo matches found.")
@@ -251,7 +247,6 @@ async def verify_certificate_live(file: UploadFile = File(...)):
         conn.commit(); conn.close()
         return {"status": "Forgery Alert", "message": message}
 
-    # STEP 5: Final Data Verification against DB
     cursor.execute("SELECT name, course, blockchain_hash FROM certificates WHERE registration_no = ? AND institution_id = ?",
                    (extracted_id, inst_id))
     cert_result = cursor.fetchone()
@@ -272,7 +267,8 @@ async def verify_certificate_live(file: UploadFile = File(...)):
     conn.commit()
     conn.close()
     return response
+
+# This block allows the script to be run directly and starts the server
 if __name__ == "__main__":
     import uvicorn
-    # This line tells the script to run the FastAPI app using the uvicorn server
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

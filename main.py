@@ -27,7 +27,8 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 # This block helps PyInstaller find the Tesseract-OCR program on Windows
-if hasattr(sys, '_MEIPASS'):
+# This block helps the Windows executable find the bundled Tesseract-OCR program
+if hasattr(sys, '_MEIPASS') and sys.platform == 'win32':
     tesseract_path = os.path.join(sys._MEIPASS, 'Tesseract-OCR', 'tesseract.exe')
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
 

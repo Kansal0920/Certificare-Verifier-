@@ -1,3 +1,6 @@
+
+import sys
+import os
 import pytesseract
 import cv2
 import numpy as np
@@ -7,29 +10,39 @@ import pandas as pd
 from io import BytesIO, StringIO
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-import os
 import qrcode
 import base64
 import hashlib
 from datetime import datetime
-import sys
 
-# This block helps PyInstaller find the Tesseract-OCR program
+# ✅ NEW: Helper function to handle file paths in packaged executables
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+# This block helps PyInstaller find the Tesseract-OCR program on Windows
 if hasattr(sys, '_MEIPASS'):
     tesseract_path = os.path.join(sys._MEIPASS, 'Tesseract-OCR', 'tesseract.exe')
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
-# --- SETUP ---
-DB_FILE = "database.db"
-LOGO_DIR = "uploads/logos"
+# --- SETUP (✅ UPDATED with resource_path) ---
+DB_FILE = resource_path("database.db")
+LOGO_DIR = resource_path("uploads/logos")
 os.makedirs(LOGO_DIR, exist_ok=True)
+
 
 # --- ADMIN CREDS ---
 ADMIN_EMAIL = "admin@gmail.com"
 ADMIN_PASSWORD = "P@ssword123"
 
 # --- FastAPI Init ---
-app = FastAPI(title="CertiFier API (Production)", version="V-Final-Prod")
+app = FastAPI(title="CertiFier API (Final Build)", version="V-Final-Build")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -38,7 +51,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- DB INIT (UPGRADED SCHEMA) ---
+# --- DB INIT ---
 @app.on_event("startup")
 async def startup_event():
     conn = sqlite3.connect(DB_FILE)
@@ -80,7 +93,6 @@ def generate_qr_code_base64(cert_data: dict):
     return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
 # --- API ENDPOINTS ---
-# ... (All other endpoints like /admin/login, /dashboard/live_intelligence, etc., remain the same)
 @app.post("/admin/login")
 async def admin_login(email: str = Form(...), password: str = Form(...)):
     if email == ADMIN_EMAIL and password == ADMIN_PASSWORD:
@@ -102,11 +114,15 @@ async def blacklist_certificate(reg_no: str = Form(...), inst_id: int = Form(...
 
 @app.post("/institution/register")
 async def register_institution(name: str = Form(...), logo: UploadFile = File(...)):
-    logo_path = os.path.join(LOGO_DIR, logo.filename)
-    with open(logo_path, "wb") as buffer: buffer.write(await logo.read())
+    # The relative path is stored in the DB, but the file is saved to the absolute path
+    relative_logo_path = os.path.join("uploads/logos", logo.filename)
+    absolute_logo_path = resource_path(relative_logo_path)
+    
+    with open(absolute_logo_path, "wb") as buffer: buffer.write(await logo.read())
     conn = sqlite3.connect(DB_FILE); cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO institutions (name, logo_path) VALUES (?, ?)", (name, logo_path))
+        # Store the relative path in the database
+        cursor.execute("INSERT INTO institutions (name, logo_path) VALUES (?, ?)", (name, relative_logo_path))
         conn.commit()
         return {"status": "success", "message": f"Institution '{name}' registered."}
     except sqlite3.IntegrityError:
@@ -167,14 +183,11 @@ async def verify_certificate_live(file: UploadFile = File(...)):
     image_cv = cv2.imdecode(np.frombuffer(contents, np.uint8), cv2.IMREAD_COLOR)
     gray_image = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
     
-    # ✅ NEW: Image Preprocessing to improve OCR accuracy
-    # Apply thresholding to get a pure black and white image
     _, preprocessed_image = cv2.threshold(gray_image, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # ✅ UPDATED: Use the preprocessed image for OCR
     quick_text = pytesseract.image_to_string(preprocessed_image)
     cursor.execute("SELECT id, name, logo_path FROM institutions")
     all_institutions = cursor.fetchall()
@@ -218,7 +231,6 @@ async def verify_certificate_live(file: UploadFile = File(...)):
         conn.commit(); conn.close()
         return {"status": "Forgery Alert", "message": message}
 
-    # ... (Rest of the verification logic: blacklist, logo check, db check, etc.)
     cursor.execute("SELECT reason FROM blacklist WHERE registration_no = ? AND institution_id = ?", (extracted_id, inst_id))
     if cursor.fetchone():
         status = "Blacklisted"; message = f"This certificate ID ({extracted_id}) is blacklisted."
@@ -228,15 +240,25 @@ async def verify_certificate_live(file: UploadFile = File(...)):
         return {"status": "Forgery Alert", "message": message}
 
     try:
-        logo_template = cv2.imread(detected_institution["logo_path"], 0)
+        # ✅ UPDATED: Use resource_path to load the logo template
+        logo_template_path = resource_path(detected_institution["logo_path"])
+        logo_template = cv2.imread(logo_template_path, 0)
+        
+        if logo_template is None:
+             raise Exception(f"Logo file not found at {logo_template_path}")
+
         orb = cv2.ORB_create(nfeatures=2000)
         kp1, des1 = orb.detectAndCompute(logo_template, None)
         kp2, des2 = orb.detectAndCompute(gray_image, None)
+        
+        if des1 is None or des2 is None:
+            raise Exception("Could not compute descriptors for logo matching.")
+            
         bf = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
         matches = sorted(bf.match(des1, des2), key=lambda x: x.distance)
-        if len(matches) > 10:
-             good_matches = matches[:10]
-             if good_matches[0].distance > 75:
+        
+        if len(matches) > 20:
+             if matches[0].distance > 75:
                  raise Exception("Poor logo match quality.")
         else:
              raise Exception("Not enough logo matches found.")
@@ -268,7 +290,6 @@ async def verify_certificate_live(file: UploadFile = File(...)):
     conn.close()
     return response
 
-# This block allows the script to be run directly and starts the server
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

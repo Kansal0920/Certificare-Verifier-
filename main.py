@@ -1,7 +1,7 @@
 # main.py
 # AAGNI-CertiFier Backend (Definitive Intelligence Edition V3 - OpenCV)
 # Final, stable version with OpenCV QR Code Support and Flexible OCR.
-
+import sys
 import pytesseract
 import cv2
 import numpy as np
@@ -16,6 +16,11 @@ import qrcode
 import base64
 import hashlib
 from datetime import datetime
+# This block helps PyInstaller find the Tesseract-OCR program
+if hasattr(sys, '_MEIPASS'):
+    # This is the path when the app is a bundled executable
+    tesseract_path = os.path.join(sys._MEIPASS, 'Tesseract-OCR', 'tesseract.exe')
+    pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
 # --- SETUP ---
 DB_FILE = "database.db"
